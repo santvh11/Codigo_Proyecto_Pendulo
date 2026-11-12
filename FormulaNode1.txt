@@ -1,0 +1,57 @@
+// =====================================================================
+// FORMULA NODE 1 — Conteo de recorridos (va DENTRO del While Loop)
+// Pendulo invertido - Caracterizacion de wn y zeta
+// Version 2 (10-nov-2026): corrige el desborde del contador cuando la
+// posicion es negativa (el contador de la DAQ entrega enteros sin signo).
+// ---------------------------------------------------------------------
+// ENTRADAS (clic derecho en el borde > Add Input):
+//   p      DBL  posicion leida del encoder en cuentas (ticks)
+//   tt     DBL  tiempo actual en segundos
+//   H      I32  histeresis en cuentas (recomendado 3)
+//   dirI   DBL  shift register: sentido actual (0 = quieto, 1 = +, -1 = -)
+//   extI   DBL  shift register: extremo alcanzado en el recorrido actual
+//   textI  DBL  shift register: tiempo en que se alcanzo ese extremo
+//   lastI  DBL  shift register: extremo anterior ya confirmado
+// SALIDAS (clic derecho en el borde > Add Output):
+//   dirO, extO, textO, lastO  -> van al lado derecho de sus shift registers
+//   push   1 cuando termino un recorrido (el pendulo se devolvio)
+//   run    cuentas avanzadas en ese recorrido (entero positivo)
+//   tpk    tiempo del extremo donde termino ese recorrido [s]
+//   pos    posicion corregida en cuentas (con signo) -> usar para la grafica
+// Todos los shift registers se inicializan en 0 fuera del ciclo.
+// =====================================================================
+
+float64 q;
+
+// Corregir el desborde: si la cuenta pasa de 2^31, en realidad es negativa
+q = p;
+if (q > 2147483647) q = q - 4294967296;
+pos = q;
+
+dirO = dirI; extO = extI; textO = textI; lastO = lastI;
+push = 0; run = 0; tpk = 0;
+
+if (dirO == 0) {
+    // Aun no arranca: espera a que se mueva H cuentas desde el punto de suelta
+    if (abs(q - lastO) >= H) {
+        if (q > lastO) dirO = 1; else dirO = -1;
+        extO = q; textO = tt;
+    }
+} else if (dirO == 1) {
+    // Avanzando en sentido +
+    if (q > extO) {
+        extO = q; textO = tt;
+    } else if (extO - q >= H) {
+        // Se devolvio: se cierra el recorrido
+        push = 1; run = extO - lastO; tpk = textO;
+        lastO = extO; dirO = -1; extO = q; textO = tt;
+    }
+} else {
+    // Avanzando en sentido -
+    if (q < extO) {
+        extO = q; textO = tt;
+    } else if (q - extO >= H) {
+        push = 1; run = lastO - extO; tpk = textO;
+        lastO = extO; dirO = 1; extO = q; textO = tt;
+    }
+}

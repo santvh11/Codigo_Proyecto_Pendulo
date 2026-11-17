@@ -1,0 +1,20 @@
+// Formula Node P
+float64 h, x, v, acc;
+int32 k;
+
+h = dt;
+if (h <= 0 || h > 0.1) h = 0.005;
+
+if (est < 0.5) {
+    thSO = th0; wSO = 0; uaO = 0;          // la mano sostiene el pendulo en th0
+} else {
+    uaO = uaI + (ug - uaI)*h/(tauM + h);   // retardo del motor
+    x = thSI*pi/180; v = wSI;
+    for (k = 0; k < 10; k++) {
+        acc = wn*wn*sin(x) - 2*zeta*wn*v + wn*wn*uaO;
+        v = v + acc*h/10;
+        x = x + v*h/10;
+    }
+    thSO = x*180/pi; wSO = v;
+    if (abs(thSO) > 60) { thSO = 60*thSO/abs(thSO); wSO = 0; }
+}

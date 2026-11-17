@@ -1,0 +1,63 @@
+// Formula Node C
+float64 h, q, raw, s, up, ud, ui, vt, f, v, Tf, tArm, r1, r2, rR, am;
+
+Tf = 0.02;     // filtro de la derivada [s]
+tArm = 0.2;    // tiempo dentro de la ventana para activar el control [s]
+r1 = rT1; if (r1 <= 0.05 || r1 > 2) r1 = 1;   // proteccion si no se configuro
+r2 = rT2; if (r2 <= 0.05 || r2 > 2) r2 = 1;
+rR = (r1 + r2)/2;
+// rR: empuje de referencia de las ganancias
+am = AOmax; if (am <= 0 || am > 5) am = 5;      // AO que da el voltaje de referencia de rT
+
+h = dt;
+if (h <= 0 || h > 0.1) h = 0.005;
+
+// --- Angulo ---
+q = cnt;
+if (q > 2147483647.0) q = q - 4294967296.0;
+if (sim > 0.5) th = floor(thSim/0.045 + 0.5)*0.045;
+else th = sentido*(q - Nv)*0.045;
+err = -th;
+
+// --- Derivada filtrada ---
+raw = (th - thPI)/h;
+dFO = dFI + (h/(Tf + h))*(raw - dFI);
+thPO = th;
+
+// --- Maquina de estados ---
+estO = estI; intO = intI; tEO = tEI + h; u = 0; ug = 0;
+
+if (estO == 0) {
+    intO = 0;
+    if (abs(th) < ventana) {
+        if (tEO >= tArm) { estO = 1; tEO = 0; }
+    } else {
+        tEO = 0;
+    }
+} else if (estO == 1) {
+    if (abs(th) > limite) {
+        estO = 2; tEO = 0; intO = 0;
+    } else {
+        s = 0;
+        if (comp > 0.5) s = sin(th*pi/180);       // compensacion de gravedad
+        up = Kp*err;
+        ud = -Kd*dFO;
+        ui = intO + Ki*err*h;
+        vt = rR*(up + ui + ud) - s;              // torque pedido / torque de gravedad maximo
+        if (vt > 0) f = vt/r1; else f = vt/r2;
+        if (abs(f) < 1) intO = ui;               // anti-windup
+        v = rR*(up + intO + ud) - s;
+        if (v > 0) { u = v/r1; if (u > 1) u = 1; ug = u*r1; }
+        else       { u = v/r2; if (u < -1) u = -1; ug = u*r2; }
+    }
+} else {
+    intO = 0;
+    if (tEO > 1) { estO = 0; tEO = 0; }
+}
+
+// --- Salidas al actuador ---
+AO = 0; m1 = 0; m2 = 0;
+if (estO == 1) {
+    if (u > 0) { m1 = 1; AO = AO01 + (am - AO01)*sqrt(u); }
+    if (u < 0) { m2 = 1; AO = AO02 + (am - AO02)*sqrt(-u); }
+}
